@@ -177,7 +177,7 @@ function mostrarMsg(el, texto, color) {
 }
 
 // ──────────────────────────────────────────────────────────────
-//  ADMIN — lista de hoy pendientes
+//  ADMIN — todos los pendientes (cualquier día)
 // ──────────────────────────────────────────────────────────────
 async function cargarAdminLista() {
   const cont = document.getElementById("admin-lista");
@@ -185,11 +185,11 @@ async function cargarAdminLista() {
   try {
     const todos = await todosLosDocs();
     const hoy = todos
-      .filter(d => esHoy(d.fecha) && d.resultado === "pendiente")
+      .filter(d => d.resultado === "pendiente")
       .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
 
     if (!hoy.length) {
-      cont.innerHTML = "<p style='color:var(--text-dim);font-size:.9rem'>No hay pronósticos pendientes hoy.</p>";
+      cont.innerHTML = "<p style='color:var(--text-dim);font-size:.9rem'>No hay pronósticos pendientes.</p>";
       return;
     }
     cont.innerHTML = "";
@@ -271,13 +271,21 @@ async function cargarPronosticosPublicos() {
 
   try {
     const todos = await todosLosDocs();
-    const hoy = todos
-      .filter(d => esHoy(d.fecha))
+
+    // Solo pendientes de hoy en la pantalla principal
+    const pendientesHoy = todos
+      .filter(d => d.resultado === "pendiente")
       .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
 
-    if (!hoy.length) { noProno.classList.remove("hidden"); return; }
+    if (!pendientesHoy.length) { noProno.classList.remove("hidden"); }
+    else { pendientesHoy.forEach((d, i) => cont.appendChild(buildCard(d.id, d, i))); }
 
-    hoy.forEach((d, i) => cont.appendChild(buildCard(d.id, d, i)));
+    // Historial público: todos los resueltos (todos los tiempos)
+    const resueltos = todos
+      .filter(d => d.resultado !== "pendiente")
+      .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+
+    cargarHistorialPublico(resueltos);
     actualizarStats();
   } catch(err) {
     cont.innerHTML = `<div style='color:var(--red);padding:20px'>
@@ -285,6 +293,27 @@ async function cargarPronosticosPublicos() {
       <small>Verifica que el projectId en app.js sea correcto.</small>
     </div>`;
   }
+}
+
+function cargarHistorialPublico(resueltos) {
+  const sec  = document.getElementById("historial-publico-section");
+  const cont = document.getElementById("historial-publico-lista");
+  if (!resueltos.length) { sec.classList.add("hidden"); return; }
+
+  sec.classList.remove("hidden");
+  cont.innerHTML = "";
+  resueltos.forEach(d => {
+    const item = document.createElement("div");
+    item.className = "hist-item";
+    // Formatear fecha legible
+    const fecha = d.fecha?.toDate ? d.fecha.toDate() : new Date();
+    const fechaStr = fecha.toLocaleDateString("es-CO", { day:"2-digit", month:"short" });
+    item.innerHTML = `
+      <span class="hist-badge ${d.resultado}">${d.resultado.toUpperCase()}</span>
+      <span style="flex:1">${d.emoji} ${d.partido}</span>
+      <span style="color:var(--text-dim);font-size:.8rem">${fechaStr}</span>`;
+    cont.appendChild(item);
+  });
 }
 
 function buildCard(id, data, idx) {
